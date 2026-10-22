@@ -14,7 +14,7 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/investigate/:transactionId", (req, res) => {
+app.get("/investigate/:transactionId", async (req, res) => {
   const parsed = z.string()
     .regex(/^TX-\d{4}$/)
     .safeParse(req.params.transactionId);
@@ -25,13 +25,21 @@ app.get("/investigate/:transactionId", (req, res) => {
     });
   }
 
-  const result = investigateCashback(parsed.data);
+  try {
+    const result = await investigateCashback(parsed.data);
 
-  if (!result) {
-    return res.status(404).json({
-      error: "Transaction not found."
+    if (!result) {
+      return res.status(404).json({
+        error: "Transaction not found."
+      });
+    }
+
+    return res.json(result);
+  } catch (error) {
+    console.error("Investigation failed:", error);
+
+    return res.status(500).json({
+      error: "Unable to investigate the transaction right now."
     });
   }
-
-  return res.json(result);
 });

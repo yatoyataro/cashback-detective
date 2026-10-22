@@ -1,9 +1,8 @@
 
 import {
-  transactions,
-  merchantPolicies,
-  type Transaction
-} from "./data.js";
+  findTransaction,
+  findMerchantPolicy
+} from "./repository.js";
 
 export type InvestigationResult = {
   transactionId: string;
@@ -19,22 +18,16 @@ export type InvestigationResult = {
   };
 };
 
-export function investigateCashback(
+export async function investigateCashback(
   transactionId: string
-): InvestigationResult | null {
-  const transaction = transactions.find(
-    (item) => item.id === transactionId
-  );
+): Promise<InvestigationResult | null> {
+  const transaction = await findTransaction(transactionId);
 
-  // The transaction does not exist.
   if (!transaction) {
     return null;
   }
 
-  const policy = merchantPolicies.find(
-    (item) => item.merchant === transaction.merchant
-  );
-
+  const policy = await findMerchantPolicy(transaction.merchant);
   const threshold = policy?.investigationAfterDays ?? null;
 
   let decision: string;
@@ -53,7 +46,8 @@ export function investigateCashback(
   } else if (transaction.status === "credited") {
     decision = "already_credited";
     message = "This transaction's cashback has already been credited.";
-    nextAction = "Check the rewards balance for the credited cashback.";
+    nextAction =
+      "Check the rewards balance for the credited cashback.";
   } else if (threshold === null) {
     decision = "policy_unavailable";
     message =
