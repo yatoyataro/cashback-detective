@@ -8,6 +8,21 @@ export const app = express();
 
 app.use(express.json());
 
+const generalQuestionSchema = z.object({
+  question: z.string().trim().min(1).max(1000)
+});
+
+const SAFE_GENERAL_ANSWER =
+  "I'm Cashback Detective, a demo assistant that checks fictional cashback transactions. " +
+  "Provide a transaction ID, such as TX-1001, and I'll check its status, " +
+  "apply the demo policy, and explain the next recommended action. " +
+  "I can't verify real ShopBack accounts or official ShopBack policies.";
+
+// AI responses are opt-in and disabled during automated tests.
+const ENABLE_AI_GENERAL_QUESTIONS =
+  process.env.ENABLE_AI_GENERAL_QUESTIONS === "true" &&
+  process.env.NODE_ENV !== "test";
+
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -45,13 +60,8 @@ app.get("/investigate/:transactionId", async (req, res) => {
   }
 });
 
-
 app.post("/ask", async (req, res) => {
-  const schema = z.object({
-    question: z.string().trim().min(1).max(1000)
-  });
-
-  const parsed = schema.safeParse(req.body);
+  const parsed = generalQuestionSchema.safeParse(req.body);
 
   if (!parsed.success) {
     return res.status(400).json({
@@ -59,21 +69,22 @@ app.post("/ask", async (req, res) => {
     });
   }
 
+  const question = parsed.data.question;
 
   try {
-    const question = parsed.data.question;
-
+    // Detect transaction IDs before using the AI.
+    // Transaction decisions always come from the rules engine.
     const transactionId = question.match(/\bTX-\d{4}\b/i)?.[0];
 
     if (transactionId) {
-      const investigation = await investigateCashback(
-        transactionId.toUpperCase()
-      );
+      const normalizedId = transactionId.toUpperCase();
+      const investigation =
+        await investigateCashback(normalizedId);
 
       if (!investigation) {
         return res.status(404).json({
           error: "Transaction not found.",
-          transactionId: transactionId.toUpperCase()
+          transactionId: normalizedId
         });
       }
 
@@ -87,18 +98,36 @@ app.post("/ask", async (req, res) => {
       });
     }
 
-    const answer = await askCashbackAgent(question);
+    // General questions can use the local AI when explicitly enabled.
+    if (ENABLE_AI_GENERAL_QUESTIONS) {
+      try {
+        const answer = await askCashbackAgent(question);
 
+        return res.json({
+          answer,
+          investigation: null,
+          answerSource: "local_ai"
+        });
+      } catch (error) {
+        // An AI failure should not make the API unavailable.
+        console.error(
+          "Local AI failed; using the safe fallback:",
+          error
+        );
+      }
+    }
+
+    // Keep the default response deterministic and testable.
     return res.json({
-      answer,
-      investigation: null
+      answer: SAFE_GENERAL_ANSWER,
+      investigation: null,
+      answerSource: "fallback"
     });
   } catch (error) {
-    console.error("AI investigation failed:", error);
+    console.error("Request failed:", error);
 
-    return res.status(502).json({
-      error: "The AI investigation service is temporarily unavailable."
+    return res.status(500).json({
+      error: "Unable to process your request right now."
     });
   }
 });
-

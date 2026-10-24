@@ -65,4 +65,20 @@ describe("Cashback Detective API", () => {
       "Invalid transaction ID format. Use TX-1001."
     );
   });
+
+  it("returns a safe explanation for a general question", async () => {
+    const response = await request(app)
+      .post("/ask")
+      .send({
+        question: "What is Cashback Detective, and how can it help me?"
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.answer).toContain("demo assistant");
+    expect(response.body.answer).toContain("TX-1001");
+    expect(response.body.answer).toContain(
+      "I can't verify real ShopBack accounts"
+    );
+    expect(response.body.investigation).toBeNull();
+  });
 });
