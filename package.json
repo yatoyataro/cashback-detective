@@ -4,11 +4,13 @@
   "type": "module",
   "description": "",
   "main": "index.js",
+
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval": "tsx evals/run.ts"
   },
   "keywords": [],
   "author": "",
