@@ -2,7 +2,6 @@
 import express from "express";
 import { z } from "zod";
 import { investigateCashback } from "./cashback.js";
-import { askCashbackAgent } from "./agent.js";
 
 export const app = express();
 
@@ -18,10 +17,54 @@ const SAFE_GENERAL_ANSWER =
   "apply the demo policy, and explain the next recommended action. " +
   "I can't verify real ShopBack accounts or official ShopBack policies.";
 
-// AI responses are opt-in and disabled during automated tests.
-const ENABLE_AI_GENERAL_QUESTIONS =
-  process.env.ENABLE_AI_GENERAL_QUESTIONS === "true" &&
-  process.env.NODE_ENV !== "test";
+function answerGeneralQuestion(question: string): string {
+  const normalized = question.toLowerCase();
+
+  if (
+    /\b(what is|what's|tell me about|who are you)\b/.test(normalized) &&
+    /\b(cashback detective|you|your purpose)\b/.test(normalized)
+  ) {
+    return (
+      "Cashback Detective is a demo assistant that checks fictional cashback transactions. " +
+      "Provide a transaction ID, such as TX-1001, and I'll check its status, " +
+      "apply the demo policy, and explain the next recommended action. " +
+      "I can't verify real ShopBack accounts or official ShopBack policies."
+    );
+  }
+
+  if (
+    /\b(how do i|how can i|check|investigate|track|find)\b/.test(normalized) &&
+    /\b(cashback|transaction|payment)\b/.test(normalized)
+  ) {
+    return (
+      "To check your cashback in this demo, send a transaction ID such as TX-1001. " +
+      "I'll look up the fictional transaction, check its status against the demo policy, " +
+      "and explain the recommended next step."
+    );
+  }
+
+  if (
+    /\b(real|actual|my)\b/.test(normalized) &&
+    /\b(shopback|account|transactions|transaction history)\b/.test(normalized) &&
+    /\b(access|connect|login|log in|see|check|verify)\b/.test(normalized)
+  ) {
+    return (
+      "No. This demo cannot log in to or access real ShopBack accounts or transaction history. " +
+      "It can only check the fictional transactions available in its demo database."
+    );
+  }
+
+  if (
+    /\b(transaction id|transaction number|id do i need|which id)\b/.test(normalized)
+  ) {
+    return (
+      "Provide a transaction ID in the format TX-1001. " +
+      "The demo database includes examples such as TX-1001, TX-1002, TX-1003, and TX-1004."
+    );
+  }
+
+  return SAFE_GENERAL_ANSWER;
+}
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -72,8 +115,7 @@ app.post("/ask", async (req, res) => {
   const question = parsed.data.question;
 
   try {
-    // Detect transaction IDs before using the AI.
-    // Transaction decisions always come from the rules engine.
+    // Always check transaction IDs using deterministic business rules.
     const transactionId = question.match(/\bTX-\d{4}\b/i)?.[0];
 
     if (transactionId) {
@@ -87,41 +129,21 @@ app.post("/ask", async (req, res) => {
           transactionId: normalizedId
         });
       }
-
       return res.json({
         answer: [
           investigation.message,
           `Decision: ${investigation.decision}.`,
           `Next action: ${investigation.nextAction}`
         ].join("\n\n"),
-        investigation
+        investigation,
+        answerSource: "rules_engine"
       });
     }
 
-    // General questions can use the local AI when explicitly enabled.
-    if (ENABLE_AI_GENERAL_QUESTIONS) {
-      try {
-        const answer = await askCashbackAgent(question);
-
-        return res.json({
-          answer,
-          investigation: null,
-          answerSource: "local_ai"
-        });
-      } catch (error) {
-        // An AI failure should not make the API unavailable.
-        console.error(
-          "Local AI failed; using the safe fallback:",
-          error
-        );
-      }
-    }
-
-    // Keep the default response deterministic and testable.
     return res.json({
-      answer: SAFE_GENERAL_ANSWER,
+      answer: answerGeneralQuestion(question),
       investigation: null,
-      answerSource: "fallback"
+      answerSource: "predefined"
     });
   } catch (error) {
     console.error("Request failed:", error);
