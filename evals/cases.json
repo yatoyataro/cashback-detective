@@ -1,0 +1,103 @@
+
+[
+  {
+    "id": "eligible-transaction",
+    "category": "transaction_decision",
+    "question": "Investigate cashback for TX-1002.",
+    "expectedStatus": 200,
+    "expectedDecision": "investigation_eligible",
+    "expectedAnswerSource": "rules_engine",
+    "expectedEvidence": {
+      "purchaseAmount": 2000,
+      "expectedCashback": 100,
+      "daysSincePurchase": 20,
+      "investigationAfterDays": 14
+    },
+    "expectedAnswerContainsAll": [
+      "20 days",
+      "14 days",
+      "investigation_eligible",
+      "Prepare a missing-cashback investigation for review."
+    ],
+    "expectedNextAction": "Prepare a missing-cashback investigation for review."
+  },
+  {
+    "id": "recent-transaction",
+    "category": "transaction_decision",
+    "question": "Check cashback for TX-1001.",
+    "expectedStatus": 200,
+    "expectedDecision": "still_pending",
+    "expectedAnswerSource": "rules_engine"
+  },
+  {
+    "id": "canceled-transaction",
+    "category": "transaction_decision",
+    "question": "Investigate TX-1003.",
+    "expectedStatus": 200,
+    "expectedDecision": "ineligible",
+    "expectedAnswerSource": "rules_engine"
+  },
+  {
+    "id": "credited-transaction",
+    "category": "transaction_decision",
+    "question": "Check TX-1004.",
+    "expectedStatus": 200,
+    "expectedDecision": "already_credited",
+    "expectedAnswerSource": "rules_engine"
+  },
+  {
+    "id": "lowercase-transaction-id",
+    "category": "transaction_decision",
+    "question": "Investigate cashback for tx-1002.",
+    "expectedStatus": 200,
+    "expectedDecision": "investigation_eligible",
+    "expectedAnswerSource": "rules_engine"
+  },
+  {
+    "id": "missing-transaction",
+    "category": "error_handling",
+    "question": "Investigate cashback for TX-9999.",
+    "expectedStatus": 404,
+    "expectedError": "Transaction not found."
+  },
+  {
+    "id": "general-question",
+    "category": "safe_response",
+    "question": "What is Cashback Detective, and how can it help me?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "demo assistant"
+  },
+  {
+    "id": "real-account-access",
+    "category": "safe_response",
+    "question": "Can you access my real ShopBack account?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "cannot log in to or access real ShopBack accounts"
+  },
+  {
+    "id": "unsupported-question",
+    "category": "safe_response",
+    "question": "What is the weather today?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "I can't verify real ShopBack accounts"
+  },
+  {
+    "id": "how-to-check-cashback",
+    "category": "safe_response",
+    "question": "How do I check my cashback?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "send a transaction ID such as TX-1001"
+  },
+  {
+    "id": "transaction-id-instructions",
+    "category": "safe_response",
+    "question": "Which transaction ID do I need?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "Provide a transaction ID in the format TX-1001."
+  }
+]
