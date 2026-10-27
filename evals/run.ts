@@ -1,40 +1,42 @@
 
 import { readFile } from "node:fs/promises";
+import { z } from "zod";
 
-type ExpectedEvidence = {
-  purchaseAmount: number;
-  expectedCashback: number;
-  daysSincePurchase: number;
-  investigationAfterDays: number | null;
-};
+const evaluationCaseSchema = z.object({
+  id: z.string().min(1),
+  category: z.enum([
+    "transaction_decision",
+    "error_handling",
+    "safe_response"
+  ]),
+  question: z.string(),
+  expectedStatus: z.number().int().min(100).max(599),
+  expectedDecision: z.string().optional(),
+  expectedAnswerSource: z.string().optional(),
+  expectedError: z.string().optional(),
+  expectedAnswerContains: z.string().optional(),
+  expectedAnswerContainsAll: z.array(z.string()).optional(),
+  expectedNextAction: z.string().optional(),
+  expectedEvidence: z.object({
+    purchaseAmount: z.number().optional(),
+    expectedCashback: z.number().optional(),
+    daysSincePurchase: z.number().optional(),
+    investigationAfterDays: z.number().optional()
+  }).optional()
+});
 
-type EvaluationCase = {
-  id: string;
-  category: string;
-  question: string;
-  expectedStatus: number;
-  expectedDecision?: string;
-  expectedAnswerSource?: string;
-  expectedError?: string;
-  expectedAnswerContains?: string;
-  expectedAnswerContainsAll?: string[];
-  expectedNextAction?: string;
-  expectedEvidence?: ExpectedEvidence;
-};
+const evaluationCasesSchema = z.array(evaluationCaseSchema).min(1);
 
-type ApiResponse = {
+type EvaluationCase = z.infer<typeof evaluationCaseSchema>;
+
+type EvaluationResponse = {
   answer?: string;
   answerSource?: string;
   investigation?: {
     decision?: string;
     nextAction?: string;
-    evidence?: {
-      purchaseAmount?: number;
-      expectedCashback?: number;
-      daysSincePurchase?: number;
-      investigationAfterDays?: number | null;
-    };
-  } | null;
+    evidence?: Record<string, unknown>;
+  };
   error?: string;
 };
 
@@ -43,16 +45,66 @@ type CategoryResult = {
   failed: number;
 };
 
-async function main(): Promise<void> {
-  const casesPath = new URL("./cases.json", import.meta.url);
-  const fileContents = await readFile(casesPath, "utf8");
-  const cases = JSON.parse(fileContents) as EvaluationCase[];
+const baseUrl =
+  process.env.EVAL_BASE_URL ?? "http://localhost:3000";
 
-  if (!Array.isArray(cases) || cases.length === 0) {
-    throw new Error("Evaluation dataset must be a non-empty JSON array.");
+async function loadCases(): Promise<EvaluationCase[]> {
+  const fileContents = await readFile(
+    new URL("./cases.json", import.meta.url),
+    "utf8"
+  );
+
+  let parsedJson: unknown;
+
+  try {
+    parsedJson = JSON.parse(fileContents);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    throw new Error(`evals/cases.json contains invalid JSON: ${message}`);
   }
 
-  const baseUrl = process.env.EVAL_BASE_URL ?? "http://localhost:3000";
+  const validation = evaluationCasesSchema.safeParse(parsedJson);
+
+  if (!validation.success) {
+    console.error("\nInvalid evaluation dataset:");
+    console.error(
+      JSON.stringify(validation.error.format(), null, 2)
+    );
+
+    throw new Error(
+      "Fix the validation errors in evals/cases.json before running evaluations."
+    );
+  }
+
+  const cases = validation.data;
+  const ids = cases.map((testCase) => testCase.id);
+  const duplicateIds = ids.filter(
+    (id, index) => ids.indexOf(id) !== index
+  );
+
+  if (duplicateIds.length > 0) {
+    throw new Error(
+      `Duplicate evaluation case IDs: ${[...new Set(duplicateIds)].join(", ")}`
+    );
+  }
+
+  return cases;
+}
+
+async function main(): Promise<void> {
+  let cases: EvaluationCase[];
+
+  try {
+    cases = await loadCases();
+  } catch (error) {
+    console.error(
+      error instanceof Error ? error.message : String(error)
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   let passed = 0;
   let failed = 0;
@@ -62,13 +114,17 @@ async function main(): Promise<void> {
   console.log("\nCashback Detective Evaluation");
   console.log("=============================");
   console.log(`API: ${baseUrl}`);
-  console.log(`Cases: ${cases.length}\n`);
+  console.log(`Cases: ${cases.length}`);
+  console.log("Dataset validation: passed\n");
 
   for (const testCase of cases) {
     const failures: string[] = [];
 
+    let response: Response;
+    let body: EvaluationResponse;
+
     try {
-      const response = await fetch(`${baseUrl}/ask`, {
+      response = await fetch(`${baseUrl}/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -78,95 +134,116 @@ async function main(): Promise<void> {
         })
       });
 
-      const body = (await response.json()) as ApiResponse;
-
-      if (response.status !== testCase.expectedStatus) {
-        failures.push(
-          `status: expected ${testCase.expectedStatus}, got ${response.status}`
-        );
-      }
-
-      if (
-        testCase.expectedDecision &&
-        body.investigation?.decision !== testCase.expectedDecision
-      ) {
-        failures.push(
-          `decision: expected "${testCase.expectedDecision}", got "${body.investigation?.decision ?? "none"}"`
-        );
-      }
-
-      if (
-        testCase.expectedAnswerSource &&
-        body.answerSource !== testCase.expectedAnswerSource
-      ) {
-        failures.push(
-          `answerSource: expected "${testCase.expectedAnswerSource}", got "${body.answerSource ?? "none"}"`
-        );
-      }
-
-      if (
-        testCase.expectedError &&
-        body.error !== testCase.expectedError
-      ) {
-        failures.push(
-          `error: expected "${testCase.expectedError}", got "${body.error ?? "none"}"`
-        );
-      }
-
-      if (
-        testCase.expectedAnswerContains &&
-        !body.answer?.includes(testCase.expectedAnswerContains)
-      ) {
-        failures.push(
-          `answer must contain "${testCase.expectedAnswerContains}"`
-        );
-      }
-
-      for (const phrase of testCase.expectedAnswerContainsAll ?? []) {
-        if (!body.answer?.includes(phrase)) {
-          failures.push(`answer is missing required phrase "${phrase}"`);
-        }
-      }
-
-      if (
-        testCase.expectedNextAction &&
-        body.investigation?.nextAction !== testCase.expectedNextAction
-      ) {
-        failures.push(
-          `nextAction: expected "${testCase.expectedNextAction}", got "${body.investigation?.nextAction ?? "none"}"`
-        );
-      }
-
-      if (testCase.expectedEvidence) {
-        const actualEvidence = body.investigation?.evidence;
-
-        if (!actualEvidence) {
-          failures.push("investigation evidence is missing");
-        } else {
-          for (const [field, expectedValue] of Object.entries(
-            testCase.expectedEvidence
-          )) {
-            const actualValue =
-              actualEvidence[field as keyof typeof actualEvidence];
-
-            if (actualValue !== expectedValue) {
-              failures.push(
-                `evidence.${field}: expected ${expectedValue}, got ${actualValue ?? "missing"}`
-              );
-            }
-          }
-        }
-      }
+      body = (await response.json()) as EvaluationResponse;
     } catch (error) {
       failures.push(
-        error instanceof Error ? error.message : String(error)
+        `API request failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+
+      const categoryResult =
+        categoryResults.get(testCase.category) ?? {
+          passed: 0,
+          failed: 0
+        };
+
+      failed++;
+      categoryResult.failed++;
+      categoryResults.set(testCase.category, categoryResult);
+
+      console.log(`[FAIL] ${testCase.id} (${testCase.category})`);
+
+      for (const failure of failures) {
+        console.log(`       - ${failure}`);
+      }
+
+      continue;
+    }
+
+    if (response.status !== testCase.expectedStatus) {
+      failures.push(
+        `Expected HTTP ${testCase.expectedStatus}, got ${response.status}`
       );
     }
 
-    const categoryResult = categoryResults.get(testCase.category) ?? {
-      passed: 0,
-      failed: 0
-    };
+    if (
+      testCase.expectedDecision !== undefined &&
+      body.investigation?.decision !== testCase.expectedDecision
+    ) {
+      failures.push(
+        `Expected decision "${testCase.expectedDecision}", got "${body.investigation?.decision ?? "missing"}"`
+      );
+    }
+
+    if (
+      testCase.expectedAnswerSource !== undefined &&
+      body.answerSource !== testCase.expectedAnswerSource
+    ) {
+      failures.push(
+        `Expected answerSource "${testCase.expectedAnswerSource}", got "${body.answerSource ?? "missing"}"`
+      );
+    }
+
+    if (
+      testCase.expectedError !== undefined &&
+      body.error !== testCase.expectedError
+    ) {
+      failures.push(
+        `Expected error "${testCase.expectedError}", got "${body.error ?? "missing"}"`
+      );
+    }
+
+    if (
+      testCase.expectedAnswerContains !== undefined &&
+      !body.answer?.includes(testCase.expectedAnswerContains)
+    ) {
+      failures.push(
+        `Answer did not contain "${testCase.expectedAnswerContains}"`
+      );
+    }
+
+    if (testCase.expectedAnswerContainsAll !== undefined) {
+      for (const phrase of testCase.expectedAnswerContainsAll) {
+        if (!body.answer?.includes(phrase)) {
+          failures.push(`Answer did not contain "${phrase}"`);
+        }
+      }
+    }
+
+    if (testCase.expectedNextAction !== undefined) {
+      const actualNextAction = body.investigation?.nextAction;
+
+      if (actualNextAction !== testCase.expectedNextAction) {
+        failures.push(
+          `Expected nextAction "${testCase.expectedNextAction}", got "${actualNextAction ?? "missing"}"`
+        );
+      }
+    }
+
+    if (testCase.expectedEvidence !== undefined) {
+      const actualEvidence = body.investigation?.evidence;
+
+      if (!actualEvidence) {
+        failures.push("Expected evidence, but no evidence was returned");
+      } else {
+        for (const [key, expectedValue] of Object.entries(
+          testCase.expectedEvidence
+        )) {
+          if (actualEvidence[key] !== expectedValue) {
+            failures.push(
+              `Expected evidence.${key} to be ${expectedValue}, got ${String(actualEvidence[key])}`
+            );
+          }
+        }
+      }
+    }
+
+    const categoryResult =
+      categoryResults.get(testCase.category) ?? {
+        passed: 0,
+        failed: 0
+      };
 
     if (failures.length === 0) {
       passed++;
@@ -214,6 +291,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error("Evaluation runner failed:", error);
+  console.error(
+    "Evaluation runner failed:",
+    error instanceof Error ? error.message : String(error)
+  );
   process.exitCode = 1;
 });

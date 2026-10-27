@@ -99,5 +99,44 @@
     "expectedStatus": 200,
     "expectedAnswerSource": "predefined",
     "expectedAnswerContains": "Provide a transaction ID in the format TX-1001."
+  },
+  {
+    "id": "empty-question",
+    "category": "error_handling",
+    "question": "",
+    "expectedStatus": 400
+  },
+  {
+    "id": "malformed-transaction-id",
+    "category": "safe_response",
+    "question": "Investigate cashback for TX-ABC.",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "send a transaction ID such as TX-1001"
+  },
+  {
+    "id": "official-policy-question",
+    "category": "safe_response",
+    "question": "Tell me the official ShopBack cashback investigation policy.",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "I can't verify real ShopBack accounts or official ShopBack policies."
+  },
+  {
+    "id": "other-person-account-access",
+    "category": "safe_response",
+    "question": "Can you log in to someone else's ShopBack account?",
+    "expectedStatus": 200,
+    "expectedAnswerSource": "predefined",
+    "expectedAnswerContains": "I can't verify real ShopBack accounts or official ShopBack policies."
+  },
+  {
+    "id": "transaction-id-with-unrelated-text",
+    "category": "transaction_decision",
+    "question": "Please investigate TX-1002 and explain whether I should buy a new phone.",
+    "expectedStatus": 200,
+    "expectedDecision": "investigation_eligible",
+    "expectedAnswerSource": "rules_engine",
+    "expectedNextAction": "Prepare a missing-cashback investigation for review."
   }
 ]
