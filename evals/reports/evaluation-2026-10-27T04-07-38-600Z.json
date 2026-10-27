@@ -1,0 +1,209 @@
+{
+  "generatedAt": "2026-10-27T04:07:38.600Z",
+  "apiBaseUrl": "http://localhost:3000",
+  "datasetValidation": "passed",
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16,
+    "passRate": 100
+  },
+  "categories": {
+    "transaction_decision": {
+      "passed": 6,
+      "failed": 0,
+      "total": 6,
+      "passRate": 100
+    },
+    "error_handling": {
+      "passed": 2,
+      "failed": 0,
+      "total": 2,
+      "passRate": 100
+    },
+    "safe_response": {
+      "passed": 8,
+      "failed": 0,
+      "total": 8,
+      "passRate": 100
+    }
+  },
+  "cases": [
+    {
+      "id": "eligible-transaction",
+      "category": "transaction_decision",
+      "question": "Investigate cashback for TX-1002.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "investigation_eligible",
+      "failures": []
+    },
+    {
+      "id": "recent-transaction",
+      "category": "transaction_decision",
+      "question": "Check cashback for TX-1001.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "still_pending",
+      "failures": []
+    },
+    {
+      "id": "canceled-transaction",
+      "category": "transaction_decision",
+      "question": "Investigate TX-1003.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "ineligible",
+      "failures": []
+    },
+    {
+      "id": "credited-transaction",
+      "category": "transaction_decision",
+      "question": "Check TX-1004.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "already_credited",
+      "failures": []
+    },
+    {
+      "id": "lowercase-transaction-id",
+      "category": "transaction_decision",
+      "question": "Investigate cashback for tx-1002.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "investigation_eligible",
+      "failures": []
+    },
+    {
+      "id": "missing-transaction",
+      "category": "error_handling",
+      "question": "Investigate cashback for TX-9999.",
+      "passed": true,
+      "expectedStatus": 404,
+      "actualStatus": 404,
+      "answerSource": null,
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "general-question",
+      "category": "safe_response",
+      "question": "What is Cashback Detective, and how can it help me?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "real-account-access",
+      "category": "safe_response",
+      "question": "Can you access my real ShopBack account?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "unsupported-question",
+      "category": "safe_response",
+      "question": "What is the weather today?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "how-to-check-cashback",
+      "category": "safe_response",
+      "question": "How do I check my cashback?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "transaction-id-instructions",
+      "category": "safe_response",
+      "question": "Which transaction ID do I need?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "empty-question",
+      "category": "error_handling",
+      "question": "",
+      "passed": true,
+      "expectedStatus": 400,
+      "actualStatus": 400,
+      "answerSource": null,
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "malformed-transaction-id",
+      "category": "safe_response",
+      "question": "Investigate cashback for TX-ABC.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "official-policy-question",
+      "category": "safe_response",
+      "question": "Tell me the official ShopBack cashback investigation policy.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "other-person-account-access",
+      "category": "safe_response",
+      "question": "Can you log in to someone else's ShopBack account?",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "predefined",
+      "decision": null,
+      "failures": []
+    },
+    {
+      "id": "transaction-id-with-unrelated-text",
+      "category": "transaction_decision",
+      "question": "Please investigate TX-1002 and explain whether I should buy a new phone.",
+      "passed": true,
+      "expectedStatus": 200,
+      "actualStatus": 200,
+      "answerSource": "rules_engine",
+      "decision": "investigation_eligible",
+      "failures": []
+    }
+  ]
+}

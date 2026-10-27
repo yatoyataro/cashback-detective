@@ -1,5 +1,5 @@
 
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 
 const evaluationCaseSchema = z.object({
@@ -36,13 +36,25 @@ type EvaluationResponse = {
     decision?: string;
     nextAction?: string;
     evidence?: Record<string, unknown>;
-  };
+  } | null;
   error?: string;
 };
 
 type CategoryResult = {
   passed: number;
   failed: number;
+};
+
+type CaseResult = {
+  id: string;
+  category: EvaluationCase["category"];
+  question: string;
+  passed: boolean;
+  expectedStatus: number;
+  actualStatus: number | null;
+  answerSource: string | null;
+  decision: string | null;
+  failures: string[];
 };
 
 const baseUrl =
@@ -110,6 +122,7 @@ async function main(): Promise<void> {
   let failed = 0;
 
   const categoryResults = new Map<string, CategoryResult>();
+  const caseResults: CaseResult[] = [];
 
   console.log("\nCashback Detective Evaluation");
   console.log("=============================");
@@ -151,6 +164,18 @@ async function main(): Promise<void> {
       failed++;
       categoryResult.failed++;
       categoryResults.set(testCase.category, categoryResult);
+
+      caseResults.push({
+        id: testCase.id,
+        category: testCase.category,
+        question: testCase.question,
+        passed: false,
+        expectedStatus: testCase.expectedStatus,
+        actualStatus: null,
+        answerSource: null,
+        decision: null,
+        failures
+      });
 
       console.log(`[FAIL] ${testCase.id} (${testCase.category})`);
 
@@ -239,13 +264,15 @@ async function main(): Promise<void> {
       }
     }
 
+    const casePassed = failures.length === 0;
+
     const categoryResult =
       categoryResults.get(testCase.category) ?? {
         passed: 0,
         failed: 0
       };
 
-    if (failures.length === 0) {
+    if (casePassed) {
       passed++;
       categoryResult.passed++;
       console.log(`[PASS] ${testCase.id} (${testCase.category})`);
@@ -260,21 +287,48 @@ async function main(): Promise<void> {
     }
 
     categoryResults.set(testCase.category, categoryResult);
+
+    caseResults.push({
+      id: testCase.id,
+      category: testCase.category,
+      question: testCase.question,
+      passed: casePassed,
+      expectedStatus: testCase.expectedStatus,
+      actualStatus: response.status,
+      answerSource: body.answerSource ?? null,
+      decision: body.investigation?.decision ?? null,
+      failures
+    });
   }
 
   const total = passed + failed;
   const passRate = total === 0 ? 0 : (passed / total) * 100;
 
+  const categories = Object.fromEntries(
+    [...categoryResults.entries()].map(([category, result]) => {
+      const categoryTotal = result.passed + result.failed;
+      const categoryRate =
+        categoryTotal === 0
+          ? 0
+          : (result.passed / categoryTotal) * 100;
+
+      return [
+        category,
+        {
+          ...result,
+          total: categoryTotal,
+          passRate: Number(categoryRate.toFixed(1))
+        }
+      ];
+    })
+  );
+
   console.log("\nCategory Results");
   console.log("================");
 
-  for (const [category, result] of categoryResults) {
-    const categoryTotal = result.passed + result.failed;
-    const categoryRate =
-      categoryTotal === 0 ? 0 : (result.passed / categoryTotal) * 100;
-
+  for (const [category, result] of Object.entries(categories)) {
     console.log(
-      `${category}: ${result.passed}/${categoryTotal} passed (${categoryRate.toFixed(1)}%)`
+      `${category}: ${result.passed}/${result.total} passed (${result.passRate.toFixed(1)}%)`
     );
   }
 
@@ -284,6 +338,48 @@ async function main(): Promise<void> {
   console.log(`Failed: ${failed}`);
   console.log(`Total: ${total}`);
   console.log(`Pass rate: ${passRate.toFixed(1)}%`);
+
+  const generatedAt = new Date().toISOString();
+  const timestamp = generatedAt.replace(/[:.]/g, "-");
+  const reportDirectory = new URL("./reports/", import.meta.url);
+  const reportUrl = new URL(
+    `evaluation-${timestamp}.json`,
+    reportDirectory
+  );
+
+  const report = {
+    generatedAt,
+    apiBaseUrl: baseUrl,
+    datasetValidation: "passed",
+    summary: {
+      passed,
+      failed,
+      total,
+      passRate: Number(passRate.toFixed(1))
+    },
+    categories,
+    cases: caseResults
+  };
+
+  try {
+    await mkdir(reportDirectory, { recursive: true });
+    await writeFile(
+      reportUrl,
+      JSON.stringify(report, null, 2) + "\n",
+      "utf8"
+    );
+
+    console.log("\nJSON Report");
+    console.log("===========");
+    console.log(`Saved to: ${reportUrl.pathname}`);
+  } catch (error) {
+    console.error(
+      "\nFailed to save JSON report:",
+      error instanceof Error ? error.message : String(error)
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   if (failed > 0) {
     process.exitCode = 1;
